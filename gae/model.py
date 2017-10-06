@@ -171,7 +171,8 @@ class MyModelVAE(Model):
                                           dropout=self.dropout,
                                           logging=self.logging)(self.z)
         
-        self.reconstructions = tf.reduce_sum(self.z, 1)
+        self.reconstructions = tf.reduce_sum(self.z, 2)
+        self.reconstructions = tf.reshape(self.reconstructions, [-1])
 
         # self.reconstructions = Dense(input_dim=FLAGS.hidden2,
         #                                   output_dim=1,
@@ -179,6 +180,4 @@ class MyModelVAE(Model):
         #                                   pos=True,
         #                                   act=lambda x: x,
         #                                   logging=self.logging)(self.z)
-        self.reconstructions = tf.squeeze(self.reconstructions)
-
 
