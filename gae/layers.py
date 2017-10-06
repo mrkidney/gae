@@ -117,28 +117,23 @@ class Pairwise(Layer):
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
+        self.input_dim = input_dim
         self.output_dim = output_dim
-
-        with tf.variable_scope(self.name + '_vars'):
-            self.vars['W'] = weight_variable_glorot(input_dim, output_dim, name = 'W')
-            self.vars['V'] = weight_variable_glorot(input_dim, output_dim, name = 'V')
 
         if self.logging:
             self._log_vars()
 
-    def call(self, inputs, order):
+    def _call(self, inputs):
         x = inputs
         x = tf.nn.dropout(x, 1-self.dropout)
 
-        x_w = tf.matmul(x, self.vars['W'])
-        x_v = tf.matmul(x, self.vars['V'])
-        x_w = tf.expand_dims(x_w, order)
-        x_v = tf.expand_dims(x_v, 1-order)
+        x_w = tf.expand_dims(x, 0)
+        x_v = tf.expand_dims(x, 1)
 
         vertex_count = int(x.get_shape()[0])
-        output = tf.ones([vertex_count, vertex_count, self.output_dim], tf.float32)
+        output = tf.ones([vertex_count, vertex_count, self.input_dim], tf.float32)
         output = self.act(x_w * output * x_v) #broadcasting
-        output = tf.reshape(output, [-1, self.output_dim])
+        output = tf.reshape(output, [-1, self.input_dim])
 
         return output
 

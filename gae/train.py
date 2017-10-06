@@ -15,7 +15,7 @@ from sklearn.metrics import average_precision_score
 from gae.optimizer import OptimizerAE, OptimizerVAE
 from gae.input_data import load_data
 from gae.model import GCNModelAE, GCNModelVAE
-from model import GCNModelAE, GCNModelVAE
+from model import GCNModelAE, GCNModelVAE, MyModelVAE
 from gae.preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges
 
 # Settings
@@ -30,7 +30,7 @@ flags.DEFINE_integer('hidden4', 16, 'Number of units in hidden layer 4.')
 flags.DEFINE_float('weight_decay', 0, 'Weight for L2 loss on embedding matrix.')
 flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
 
-flags.DEFINE_string('model', 'gcn_vae', 'Model string.')
+flags.DEFINE_string('model', 'my_vae', 'Model string.')
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
 flags.DEFINE_integer('features', 0, 'Whether to use features (1) or not (0).')
 flags.DEFINE_integer('gpu', -1, 'Which gpu to use (-1 means using cpu)')
@@ -85,6 +85,8 @@ if model_str == 'gcn_ae':
     model = GCNModelAE(placeholders, num_features, features_nonzero)
 elif model_str == 'gcn_vae':
     model = GCNModelVAE(placeholders, num_features, num_nodes, features_nonzero)
+elif model_str == 'my_vae':
+    model = MyModelVAE(placeholders, num_features, num_nodes, features_nonzero)
 
 pos_weight = float(adj.shape[0] * adj.shape[0] - adj.sum()) / adj.sum()
 norm = adj.shape[0] * adj.shape[0] / float((adj.shape[0] * adj.shape[0] - adj.sum()) * 2)
@@ -97,7 +99,7 @@ with tf.name_scope('optimizer'):
                                                                       validate_indices=False), [-1]),
                           pos_weight=pos_weight,
                           norm=norm)
-    elif model_str == 'gcn_vae':
+    elif model_str == 'gcn_vae' or model_str == 'my_vae':
         opt = OptimizerVAE(preds=model.reconstructions,
                            labels=tf.reshape(tf.sparse_tensor_to_dense(placeholders['adj_orig'],
                                                                        validate_indices=False), [-1]),
