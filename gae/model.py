@@ -167,7 +167,7 @@ class MyModelVAE(Model):
         self.z = Dense(input_dim=FLAGS.hidden2,
                                           output_dim=FLAGS.hidden3,
                                           dropout=self.dropout,
-                                          act=lambda x: x,
+                                          act=tf.nn.relu,
                                           logging=self.logging)(self.z)
 
         self.z = Pairwise(input_dim=FLAGS.hidden3,
@@ -175,12 +175,14 @@ class MyModelVAE(Model):
                                           dropout=self.dropout,
                                           logging=self.logging)(self.z)
         
-        self.reconstructions = tf.reduce_sum(self.z, 1)
+        # self.reconstructions = tf.reduce_sum(self.z, 1)
 
-        # self.reconstructions = Dense(input_dim=FLAGS.hidden2,
-        #                                   output_dim=1,
-        #                                   dropout=self.dropout,
-        #                                   pos=True,
-        #                                   act=lambda x: x,
-        #                                   logging=self.logging)(self.z)
+        self.reconstructions = Dense(input_dim=FLAGS.hidden3,
+                                          output_dim=1,
+                                          dropout=self.dropout,
+                                          pos=True,
+                                          bias=True,
+                                          act=lambda x: x,
+                                          logging=self.logging)(self.z)
+        self.reconstructions = tf.squeeze(self.reconstructions)
 
