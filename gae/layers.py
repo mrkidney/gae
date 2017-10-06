@@ -131,7 +131,7 @@ class Pairwise(Layer):
         x_v = tf.expand_dims(x, 1)
         output = x_w * x_v
 
-        return tf.reshape(self.act(output), [-1, self.input_dim])
+        return tf.reshape(output, [-1, self.input_dim])
 
 class GraphConvolution(Layer):
     """Basic graph convolution layer for undirected graph without edge labels."""
