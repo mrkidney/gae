@@ -136,8 +136,8 @@ class Pairwise(Layer):
         x_v = tf.expand_dims(x_v, 1-order)
 
         vertex_count = int(x.get_shape()[0])
-        output = tf.zeros([vertex_count, vertex_count, self.output_dim], tf.float32)
-        output = self.act(x_w + output + x_v) #broadcasting
+        output = tf.ones([vertex_count, vertex_count, self.output_dim], tf.float32)
+        output = self.act(x_w * output * x_v) #broadcasting
         output = tf.reshape(output, [-1, self.output_dim])
 
         return output
