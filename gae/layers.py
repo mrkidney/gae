@@ -125,14 +125,14 @@ class Pairwise(Layer):
 
     def _call(self, inputs):
         x = inputs
-        x = tf.nn.dropout(x, 1-self.dropout)
+        # x = tf.nn.dropout(x, 1-self.dropout)
 
         x_w = tf.expand_dims(x, 0)
         x_v = tf.expand_dims(x, 1)
 
         vertex_count = int(x.get_shape()[0])
         output = tf.ones([vertex_count, vertex_count, self.input_dim], tf.float32)
-        output = self.act(x_w * output * x_v) #broadcasting
+        output = x_w * output * x_v
         output = tf.reshape(output, [-1, self.input_dim])
 
         return output
@@ -186,8 +186,12 @@ class InnerProductDecoder(Layer):
 
     def _call(self, inputs):
         inputs = tf.nn.dropout(inputs, 1-self.dropout)
-        x = tf.transpose(inputs)
-        x = tf.matmul(inputs, x)
+        
+        A = tf.expand_dims(inputs, 0)
+        B = tf.expand_dims(inputs, 1)
+        x = tf.reduce_sum(A * B, 2)
+        # x = tf.transpose(inputs)
+        # x = tf.matmul(inputs, x)
         x = tf.reshape(x, [-1])
         outputs = self.act(x)
         return outputs
