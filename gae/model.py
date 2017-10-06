@@ -167,7 +167,7 @@ class MyModelVAE(Model):
         self.z = Dense(input_dim=FLAGS.hidden2,
                                           output_dim=FLAGS.hidden3,
                                           dropout=self.dropout,
-                                          act=tf.nn.relu,
+                                          act=lambda x: x,
                                           logging=self.logging)(self.z)
 
         self.z = Pairwise(input_dim=FLAGS.hidden3,
