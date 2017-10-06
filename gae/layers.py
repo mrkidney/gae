@@ -131,7 +131,7 @@ class Pairwise(Layer):
         x_v = tf.expand_dims(x, 1)
         output = x_w * x_v
 
-        return output
+        return tf.reshape(self.act(output), [-1, self.input_dim])
 
 class GraphConvolution(Layer):
     """Basic graph convolution layer for undirected graph without edge labels."""
@@ -183,11 +183,8 @@ class InnerProductDecoder(Layer):
     def _call(self, inputs):
         inputs = tf.nn.dropout(inputs, 1-self.dropout)
 
-        A = tf.expand_dims(inputs, 0)
-        B = tf.expand_dims(inputs, 1)
-        x = tf.reduce_sum(A * B, 2)
-        # x = tf.transpose(inputs)
-        # x = tf.matmul(inputs, x)
+        x = tf.transpose(inputs)
+        x = tf.matmul(inputs, x)
         x = tf.reshape(x, [-1])
         outputs = self.act(x)
         return outputs
