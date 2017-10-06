@@ -128,6 +128,8 @@ class GCNModelVAE(Model):
                                           output_dim=1,
                                           dropout=self.dropout,
                                           act=lambda x: x,
+                                          bias=True,
+                                          pos=True,
                                           logging=self.logging)
 
         order0 = bottom(pairS.call(self.z, 0) * pairT.call(self.z, 0))

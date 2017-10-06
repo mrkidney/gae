@@ -4,8 +4,6 @@ from __future__ import print_function
 import time
 import os
 
-# Train on CPU (hide GPU) due to memory constraints
-os.environ['CUDA_VISIBLE_DEVICES'] = ""
 
 import tensorflow as tf
 import numpy as np
@@ -35,9 +33,16 @@ flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
 flags.DEFINE_string('model', 'gcn_vae', 'Model string.')
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
 flags.DEFINE_integer('features', 0, 'Whether to use features (1) or not (0).')
+flags.DEFINE_integer('gpu', -1, 'Which gpu to use (-1 means using cpu)')
 
 
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+if FLAGS.gpu == -1:
+    sess = tf.Session()
+else:
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(FLAGS.gpu) # Or whichever device you would like to use
+    gpu_options = tf.GPUOptions(allow_growth=True)
+    sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
 
 
 model_str = FLAGS.model
@@ -101,7 +106,6 @@ with tf.name_scope('optimizer'):
                            norm=norm)
 
 # Initialize session
-sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
 cost_val = []

@@ -65,10 +65,15 @@ class Layer(object):
             outputs = self._call(inputs)
             return outputs
 
+def zeros(shape, name=None):
+    """All zeros."""
+    initial = tf.zeros(shape, dtype=tf.float32)
+    return tf.Variable(initial, name=name)
+
 class Dense(Layer):
     """Dense layer."""
     def __init__(self, input_dim, output_dim, dropout=0., sparse_inputs=False,
-                 act=tf.nn.relu, bias=False, featureless=False, **kwargs):
+                 act=tf.nn.relu, bias=False, featureless=False, pos = False, **kwargs):
         super(Dense, self).__init__(**kwargs)
 
         self.dropout = dropout
@@ -76,6 +81,7 @@ class Dense(Layer):
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
+        self.pos = pos
 
         with tf.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name='weights')
@@ -89,7 +95,10 @@ class Dense(Layer):
         x = inputs
 
         x = tf.nn.dropout(x, 1-self.dropout)
-        output = tf.matmul(x, self.vars['weights'])
+        if self.pos:
+            output = tf.matmul(x, tf.square(self.vars['weights']))
+        else:
+            output = tf.matmul(x, self.vars['weights'])
 
         # bias
         if self.bias:
