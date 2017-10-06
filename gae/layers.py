@@ -29,6 +29,8 @@ def dropout_sparse(x, keep_prob, num_nonzero_elems):
     pre_out = tf.sparse_retain(x, dropout_mask)
     return pre_out * (1./keep_prob)
 
+def gated_activation(x, y):
+    return tf.multiply(tf.nn.sigmoid(x), tf.nn.tanh(y))
 
 class Layer(object):
     """Base layer class. Defines basic API for all layer objects.
@@ -63,6 +65,73 @@ class Layer(object):
             outputs = self._call(inputs)
             return outputs
 
+class Dense(Layer):
+    """Dense layer."""
+    def __init__(self, input_dim, output_dim, dropout=0., sparse_inputs=False,
+                 act=tf.nn.relu, bias=False, featureless=False, **kwargs):
+        super(Dense, self).__init__(**kwargs)
+
+        self.dropout = dropout
+        self.act = act
+        self.sparse_inputs = sparse_inputs
+        self.featureless = featureless
+        self.bias = bias
+
+        with tf.variable_scope(self.name + '_vars'):
+            self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name='weights')
+            if self.bias:
+                self.vars['bias'] = zeros([output_dim], name='bias')
+
+        if self.logging:
+            self._log_vars()
+
+    def _call(self, inputs):
+        x = inputs
+
+        x = tf.nn.dropout(x, 1-self.dropout)
+        output = tf.matmul(x, self.vars['weights'])
+
+        # bias
+        if self.bias:
+            output += self.vars['bias']
+
+        return self.act(output)
+
+class Pairwise(Layer):
+    """Dense layer."""
+    def __init__(self, input_dim, output_dim, dropout=0., sparse_inputs=False,
+                 act=tf.nn.relu, bias=False, featureless=False, **kwargs):
+        super(Pairwise, self).__init__(**kwargs)
+
+        self.dropout = dropout
+        self.act = act
+        self.sparse_inputs = sparse_inputs
+        self.featureless = featureless
+        self.bias = bias
+        self.output_dim = output_dim
+
+        with tf.variable_scope(self.name + '_vars'):
+            self.vars['W'] = weight_variable_glorot(input_dim, output_dim, name = 'W')
+            self.vars['V'] = weight_variable_glorot(input_dim, output_dim, name = 'V')
+
+        if self.logging:
+            self._log_vars()
+
+    def call(self, inputs, order):
+        x = inputs
+        x = tf.nn.dropout(x, 1-self.dropout)
+
+        x_w = tf.matmul(x, self.vars['W'])
+        x_v = tf.matmul(x, self.vars['V'])
+        x_w = tf.expand_dims(x_w, order)
+        x_v = tf.expand_dims(x_v, 1-order)
+
+        vertex_count = int(x.get_shape()[0])
+        output = tf.zeros([vertex_count, vertex_count, self.output_dim], tf.float32)
+        output = self.act(x_w + output + x_v) #broadcasting
+        output = tf.reshape(output, [-1, self.output_dim])
+
+        return output
 
 class GraphConvolution(Layer):
     """Basic graph convolution layer for undirected graph without edge labels."""

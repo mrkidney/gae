@@ -17,6 +17,7 @@ from sklearn.metrics import average_precision_score
 from gae.optimizer import OptimizerAE, OptimizerVAE
 from gae.input_data import load_data
 from gae.model import GCNModelAE, GCNModelVAE
+from model import GCNModelAE, GCNModelVAE
 from gae.preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges
 
 # Settings
@@ -26,12 +27,18 @@ flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
 flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
 flags.DEFINE_integer('hidden1', 32, 'Number of units in hidden layer 1.')
 flags.DEFINE_integer('hidden2', 16, 'Number of units in hidden layer 2.')
-flags.DEFINE_float('weight_decay', 0., 'Weight for L2 loss on embedding matrix.')
+flags.DEFINE_integer('hidden3', 16, 'Number of units in hidden layer 3.')
+flags.DEFINE_integer('hidden4', 16, 'Number of units in hidden layer 4.')
+flags.DEFINE_float('weight_decay', 0, 'Weight for L2 loss on embedding matrix.')
 flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
 
-flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
+flags.DEFINE_string('model', 'gcn_vae', 'Model string.')
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
-flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
+flags.DEFINE_integer('features', 0, 'Whether to use features (1) or not (0).')
+
+
+os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+
 
 model_str = FLAGS.model
 dataset_str = FLAGS.dataset
