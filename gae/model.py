@@ -114,15 +114,10 @@ class GCNModelVAE(Model):
 
 
 
-        pairS = Pairwise(input_dim=FLAGS.hidden2,
+        pair = Pairwise(input_dim=FLAGS.hidden2,
                                           output_dim=FLAGS.hidden3,
                                           dropout=self.dropout,
-                                          act=tf.nn.sigmoid,
-                                          logging=self.logging)
-        pairT = Pairwise(input_dim=FLAGS.hidden2,
-                                          output_dim=FLAGS.hidden3,
-                                          dropout=self.dropout,
-                                          act=tf.nn.tanh,
+                                          act=tf.nn.relu,
                                           logging=self.logging)
         bottom = Dense(input_dim=FLAGS.hidden3,
                                           output_dim=1,
@@ -132,9 +127,9 @@ class GCNModelVAE(Model):
                                           pos=True,
                                           logging=self.logging)
 
-        order0 = bottom(pairS.call(self.z, 0) * pairT.call(self.z, 0))
-        order1 = bottom(pairS.call(self.z, 1) * pairT.call(self.z, 1))
-        self.reconstructions = tf.squeeze(order0 * order1)
+        order0 = bottom(pair.call(self.z, 0))
+        order1 = bottom(pair.call(self.z, 1))
+        self.reconstructions = tf.squeeze(order0 + order1)
 
         # self.z = Dense(input_dim=FLAGS.hidden2,
         #                                   output_dim=FLAGS.hidden3,
