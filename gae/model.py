@@ -170,14 +170,20 @@ class MyModelVAE(Model):
                                           act=tf.nn.relu,
                                           logging=self.logging)(self.z)
 
-        self.z = Pairwise(input_dim=FLAGS.hidden3,
+        self.z = Dense(input_dim=FLAGS.hidden3,
+                                          output_dim=FLAGS.hidden4,
+                                          dropout=self.dropout,
+                                          act=lambda x: x,
+                                          logging=self.logging)(self.z)
+
+        self.z = Pairwise(input_dim=FLAGS.hidden4,
                                           output_dim=-1,
                                           dropout=self.dropout,
                                           logging=self.logging)(self.z)
         
         # self.reconstructions = tf.reduce_sum(self.z, 1)
 
-        self.reconstructions = Dense(input_dim=FLAGS.hidden3,
+        self.reconstructions = Dense(input_dim=FLAGS.hidden4,
                                           output_dim=1,
                                           dropout=self.dropout,
                                           pos=True,
