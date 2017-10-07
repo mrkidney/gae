@@ -173,6 +173,11 @@ for epoch in range(FLAGS.epochs):
           "val_ap=", "{:.5f}".format(ap_curr),
           "time=", "{:.5f}".format(time.time() - t))
 
+    variables_names =[v.name for v in tf.trainable_variables()]
+    values = sess.run(variables_names)
+    for k,v in zip(variables_names, values):
+        print(k, np.linalg.norm(v))
+
 print("Optimization Finished!")
 
 roc_score, ap_score = get_roc_score(test_edges, test_edges_false)
