@@ -170,7 +170,7 @@ for epoch in range(FLAGS.epochs):
     val_roc_score.append(roc_curr)
 
 
-    if noisy:
+    if FLAGS.noisy:
       print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
           "train_acc=", "{:.5f}".format(avg_accuracy), "val_roc=", "{:.5f}".format(val_roc_score[-1]),
           "val_ap=", "{:.5f}".format(ap_curr),
