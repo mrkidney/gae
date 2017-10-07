@@ -34,6 +34,7 @@ flags.DEFINE_string('model', 'my_vae', 'Model string.')
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
 flags.DEFINE_integer('features', 0, 'Whether to use features (1) or not (0).')
 flags.DEFINE_integer('gpu', -1, 'Which gpu to use (-1 means using cpu)')
+flags.DEFINE_boolean('noisy', True, 'Whether to output results on every epoch')
 
 
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
@@ -168,7 +169,9 @@ for epoch in range(FLAGS.epochs):
     roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false)
     val_roc_score.append(roc_curr)
 
-    print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
+
+    if noisy:
+      print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
           "train_acc=", "{:.5f}".format(avg_accuracy), "val_roc=", "{:.5f}".format(val_roc_score[-1]),
           "val_ap=", "{:.5f}".format(ap_curr),
           "time=", "{:.5f}".format(time.time() - t))
