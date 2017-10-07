@@ -164,30 +164,19 @@ class MyModelVAE(Model):
 
         self.z = self.z_mean + tf.random_normal([self.n_samples, FLAGS.hidden2]) * tf.exp(self.z_log_std)
 
+        self.z = Pairwise(input_dim=FLAGS.hidden2,
+                                          output_dim=FLAGS.hidden2,
+                                          dropout=self.dropout,
+                                          logging=self.logging)(self.z)
+        
         self.z = Dense(input_dim=FLAGS.hidden2,
                                           output_dim=FLAGS.hidden3,
                                           dropout=self.dropout,
                                           act=tf.nn.relu,
                                           logging=self.logging)(self.z)
-
-        self.z = Dense(input_dim=FLAGS.hidden3,
-                                          output_dim=FLAGS.hidden4,
-                                          dropout=self.dropout,
-                                          act=lambda x: x,
-                                          logging=self.logging)(self.z)
-
-        self.z = Pairwise(input_dim=FLAGS.hidden4,
-                                          output_dim=-1,
-                                          dropout=self.dropout,
-                                          logging=self.logging)(self.z)
-        
-        # self.reconstructions = tf.reduce_sum(self.z, 1)
-
-        self.reconstructions = Dense(input_dim=FLAGS.hidden4,
+        self.reconstructions = Dense(input_dim=FLAGS.hidden3,
                                           output_dim=1,
                                           dropout=self.dropout,
-                                          pos=True,
-                                          bias=True,
                                           act=lambda x: x,
                                           logging=self.logging)(self.z)
         self.reconstructions = tf.squeeze(self.reconstructions)
