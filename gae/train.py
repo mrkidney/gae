@@ -9,30 +9,29 @@ import tensorflow as tf
 import numpy as np
 import scipy.sparse as sp
 
-from sklearn.metrics import roc_auc_score
-from sklearn.metrics import average_precision_score
-
-from gae.optimizer import OptimizerAE, OptimizerVAE
-from gae.input_data import load_data
-from gae.model import GCNModelAE, GCNModelVAE
+from optimizer import OptimizerVAE
+from input_data import load_mutag
 from model import GCNModelAE, GCNModelVAE, MyModelVAE
-from gae.preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges
+from preprocessing import preprocess_graph, construct_feed_dict, get_split, apply_indices
+
 
 # Settings
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
+flags.DEFINE_float('learning_rate', 0.004, 'Initial learning rate.')
 flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
-flags.DEFINE_integer('hidden1', 32, 'Number of units in hidden layer 1.')
-flags.DEFINE_integer('hidden2', 16, 'Number of units in hidden layer 2.')
-flags.DEFINE_integer('hidden3', 16, 'Number of units in hidden layer 3.')
-flags.DEFINE_integer('hidden4', 16, 'Number of units in hidden layer 4.')
-flags.DEFINE_float('weight_decay', 0, 'Weight for L2 loss on embedding matrix.')
-flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
+flags.DEFINE_integer('hidden1', 16, 'Number of units in hidden layer 1.')
+flags.DEFINE_integer('hidden2', 10, 'Number of units in hidden layer 2.')
+flags.DEFINE_integer('hidden3', 10, 'Number of units in hidden layer 3.')
+flags.DEFINE_integer('hidden4', 10, 'Number of units in hidden layer 4.')
+flags.DEFINE_float('weight_decay', 5e-12, 'Weight for L2 loss on embedding matrix.')
+flags.DEFINE_float('dropout', 0.1, 'Dropout rate (1 - keep probability).')
+flags.DEFINE_float('validation', 0.2, 'fraction of data to keep for validation')
+flags.DEFINE_float('loss_scalar', 1.0, 'scalar to control classification loss relative to reconstruction loss')
+flags.DEFINE_boolean('vae', True, 'setting to false removes reconstruction and KL loss from the objective function')
 
-flags.DEFINE_string('model', 'my_vae', 'Model string.')
+flags.DEFINE_string('model', 'gcn_vae', 'Model string.')
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
-flags.DEFINE_integer('features', 0, 'Whether to use features (1) or not (0).')
 flags.DEFINE_integer('gpu', -1, 'Which gpu to use (-1 means using cpu)')
 flags.DEFINE_boolean('noisy', True, 'Whether to output results on every epoch')
 
@@ -45,144 +44,77 @@ else:
     gpu_options = tf.GPUOptions(allow_growth=True)
     sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
 
-
 model_str = FLAGS.model
 dataset_str = FLAGS.dataset
 
+
+
 # Load data
-adj, features = load_data(dataset_str)
+adj_orig, features, labels, non_identity_features = load_mutag()
+num_examples, num_nodes, num_features = features.shape
 
-# Store original adjacency matrix (without diagonal entries) for later
-adj_orig = adj
-adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
-adj_orig.eliminate_zeros()
+adj = np.zeros_like(adj_orig)
+for i in range(num_examples):
+    adj[i] = preprocess_graph(adj_orig[i]).todense()
+    adj_orig[adj_orig != 0] = 1
 
-adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges(adj)
-adj = adj_train
-
-if FLAGS.features == 0:
-    features = sp.identity(features.shape[0])  # featureless
-
-# Some preprocessing
-adj_norm = preprocess_graph(adj)
-
-# Define placeholders
 placeholders = {
-    'features': tf.sparse_placeholder(tf.float32),
-    'adj': tf.sparse_placeholder(tf.float32),
-    'adj_orig': tf.sparse_placeholder(tf.float32),
+    'features': tf.placeholder(tf.float32, shape = (None, num_nodes, num_features)),
+    'adj': tf.placeholder(tf.float32, shape = (None, num_nodes, num_nodes)),
+    'adj_orig': tf.placeholder(tf.float32, shape = (None, num_nodes, num_nodes)),
+    'labels' : tf.placeholder(tf.float32, name = "labels"),
+    'mask' : tf.placeholder(tf.int32),
     'dropout': tf.placeholder_with_default(0., shape=())
 }
 
-num_nodes = adj.shape[0]
-
-features = sparse_to_tuple(features.tocoo())
-num_features = features[2][1]
-features_nonzero = features[1].shape[0]
-
 # Create model
 model = None
-if model_str == 'gcn_ae':
-    model = GCNModelAE(placeholders, num_features, features_nonzero)
-elif model_str == 'gcn_vae':
-    model = GCNModelVAE(placeholders, num_features, num_nodes, features_nonzero)
+if model_str == 'gcn_vae':
+    model = GCNModelVAE(placeholders, num_features, num_nodes)
 elif model_str == 'my_vae':
-    model = MyModelVAE(placeholders, num_features, num_nodes, features_nonzero)
+    model = MyModelVAE(placeholders, num_features, num_nodes)
 
-pos_weight = float(adj.shape[0] * adj.shape[0] - adj.sum()) / adj.sum()
-norm = adj.shape[0] * adj.shape[0] / float((adj.shape[0] * adj.shape[0] - adj.sum()) * 2)
 
 # Optimizer
 with tf.name_scope('optimizer'):
-    if model_str == 'gcn_ae':
-        opt = OptimizerAE(preds=model.reconstructions,
-                          labels=tf.reshape(tf.sparse_tensor_to_dense(placeholders['adj_orig'],
-                                                                      validate_indices=False), [-1]),
-                          pos_weight=pos_weight,
-                          norm=norm)
-    elif model_str == 'gcn_vae' or model_str == 'my_vae':
-        opt = OptimizerVAE(preds=model.reconstructions,
-                           labels=tf.reshape(tf.sparse_tensor_to_dense(placeholders['adj_orig'],
-                                                                       validate_indices=False), [-1]),
-                           model=model, num_nodes=num_nodes,
-                           pos_weight=pos_weight,
-                           norm=norm)
+    if model_str == 'gcn_vae' or model_str == 'my_vae':
+        opt = OptimizerVAE(recons=model.reconstructions, recon_labels=placeholders['adj_orig'], preds=model.preds, 
+                           labels=placeholders['labels'], model=model, num_nodes=num_nodes)
 
-# Initialize session
+def evaluate(adj, adj_orig, features, labels, placeholders, indices, training):
+    feed_dict = construct_feed_dict(adj, adj_orig, features, labels, placeholders, indices)
+    funcs = [opt.pred_accuracy]
+    if training:
+        feed_dict.update({placeholders['dropout']: FLAGS.dropout})
+        funcs = [opt.opt_op, opt.cost, opt.recon_accuracy, opt.pred_accuracy, opt.recon_loss, opt.kl]
+    outs = sess.run(funcs, feed_dict=feed_dict)
+    return outs
+
+# Init variables
 sess.run(tf.global_variables_initializer())
 
+cost_train = []
 cost_val = []
-acc_val = []
+train_indices, val_indices = get_split(num_examples, FLAGS.validation)
 
-
-def get_roc_score(edges_pos, edges_neg, emb=None):
-    if emb is None:
-        feed_dict.update({placeholders['dropout']: 0})
-        emb = sess.run(model.z_mean, feed_dict=feed_dict)
-
-    def sigmoid(x):
-        return 1 / (1 + np.exp(-x))
-
-    # Predict on test set of edges
-    adj_rec = np.dot(emb, emb.T)
-    preds = []
-    pos = []
-    for e in edges_pos:
-        preds.append(sigmoid(adj_rec[e[0], e[1]]))
-        pos.append(adj_orig[e[0], e[1]])
-
-    preds_neg = []
-    neg = []
-    for e in edges_neg:
-        preds_neg.append(sigmoid(adj_rec[e[0], e[1]]))
-        neg.append(adj_orig[e[0], e[1]])
-
-    preds_all = np.hstack([preds, preds_neg])
-    labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds))])
-    roc_score = roc_auc_score(labels_all, preds_all)
-    ap_score = average_precision_score(labels_all, preds_all)
-
-    return roc_score, ap_score
-
-
-cost_val = []
-acc_val = []
-val_roc_score = []
-
-adj_label = adj_train + sp.eye(adj_train.shape[0])
-adj_label = sparse_to_tuple(adj_label)
-
-# Train model
 for epoch in range(FLAGS.epochs):
 
-    t = time.time()
-    # Construct feed dictionary
-    feed_dict = construct_feed_dict(adj_norm, adj_label, features, placeholders)
-    feed_dict.update({placeholders['dropout']: FLAGS.dropout})
-    # Run single weight update
-    outs = sess.run([opt.opt_op, opt.cost, opt.accuracy], feed_dict=feed_dict)
+    outs_val = evaluate(adj, adj_orig, features, labels, placeholders, val_indices, training = False)
+    cost_val.append(outs_val)
+    outs_train = evaluate(adj, adj_orig, features, labels, placeholders, train_indices, training = True)
+    cost_train.append(outs_train)
 
-    # Compute average loss
-    avg_cost = outs[1]
-    avg_accuracy = outs[2]
+    perm = np.random.permutation(num_nodes)
+    adj = adj[:, perm, :]
+    adj = adj[:, :, perm]
+    adj_orig = adj_orig[:, perm, :]
+    adj_orig = adj_orig[:, :, perm]
+    features[:, :, non_identity_features:] = features[:, perm, non_identity_features:]
 
-    roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false)
-    val_roc_score.append(roc_curr)
-
-
-    if FLAGS.noisy:
-      print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
-          "train_acc=", "{:.5f}".format(avg_accuracy), "val_roc=", "{:.5f}".format(val_roc_score[-1]),
-          "val_ap=", "{:.5f}".format(ap_curr),
-          "time=", "{:.5f}".format(time.time() - t))
-
-    # variables_names =[v.name for v in tf.trainable_variables()]
-    # values = sess.run(variables_names)
-    # for k,v in zip(variables_names, values):
-    #     print(k, np.linalg.norm(v))
+    print("Epoch:", '%04d' % (epoch + 1), "recon_loss=", "{:.5f}".format(outs_train[4]),
+                                          "recon_acc=", "{:.5f}".format(outs_train[2]),
+                                          "KL=", "{:.5f}".format(outs_train[5]),
+                                          "train_acc=", "{:.5f}".format(outs_train[3]),
+                                          "val_acc=", "{:.5f}".format(outs_val[0]))
 
 print("Optimization Finished!")
-
-roc_score, ap_score = get_roc_score(test_edges, test_edges_false)
-print('Test ROC score: ' + str(roc_score))
-print('Test AP score: ' + str(ap_score))

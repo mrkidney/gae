@@ -29,9 +29,6 @@ def dropout_sparse(x, keep_prob, num_nonzero_elems):
     pre_out = tf.sparse_retain(x, dropout_mask)
     return pre_out * (1./keep_prob)
 
-def gated_activation(x, y):
-    return tf.multiply(tf.nn.sigmoid(x), tf.nn.tanh(y))
-
 class Layer(object):
     """Base layer class. Defines basic API for all layer objects.
 
@@ -73,7 +70,7 @@ def zeros(shape, name=None):
 class Dense(Layer):
     """Dense layer."""
     def __init__(self, input_dim, output_dim, dropout=0., sparse_inputs=False,
-                 act=tf.nn.relu, bias=False, featureless=False, pos = False, **kwargs):
+                 act=tf.nn.relu, bias=False, featureless=False, **kwargs):
         super(Dense, self).__init__(**kwargs)
 
         self.dropout = dropout
@@ -81,7 +78,8 @@ class Dense(Layer):
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
-        self.pos = pos
+        self.input_dim = input_dim
+        self.output_dim = output_dim
 
         with tf.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name='weights')
@@ -95,10 +93,11 @@ class Dense(Layer):
         x = inputs
 
         x = tf.nn.dropout(x, 1-self.dropout)
-        if self.pos:
-            output = tf.matmul(x, tf.square(self.vars['weights']))
-        else:
-            output = tf.matmul(x, self.vars['weights'])
+
+        row_count = int(inputs.get_shape()[1])
+        x = tf.reshape(x, [-1, self.input_dim])
+        output = tf.matmul(x, self.vars['weights'])
+        output = tf.reshape(output, [-1, row_count, self.output_dim])
 
         # bias
         if self.bias:
@@ -135,19 +134,27 @@ class Pairwise(Layer):
 
 class GraphConvolution(Layer):
     """Basic graph convolution layer for undirected graph without edge labels."""
-    def __init__(self, input_dim, output_dim, adj, dropout=0., act=tf.nn.relu, **kwargs):
+    def __init__(self, input_dim, output_dim, adj, dropout=0., first = False, act=tf.nn.relu, **kwargs):
         super(GraphConvolution, self).__init__(**kwargs)
         with tf.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights")
         self.dropout = dropout
         self.adj = adj
         self.act = act
+        self.input_dim = input_dim
+        self.output_dim = output_dim
 
     def _call(self, inputs):
+        num_nodes = int(inputs.get_shape()[1])
+
         x = inputs
         x = tf.nn.dropout(x, 1-self.dropout)
+
+        x = tf.reshape(x, [-1, self.input_dim])
         x = tf.matmul(x, self.vars['weights'])
-        x = tf.sparse_tensor_dense_matmul(self.adj, x)
+        x = tf.reshape(x, [-1, num_nodes, self.output_dim])
+        x = tf.matmul(self.adj, x)
+
         outputs = self.act(x)
         return outputs
 
@@ -183,8 +190,8 @@ class InnerProductDecoder(Layer):
     def _call(self, inputs):
         inputs = tf.nn.dropout(inputs, 1-self.dropout)
 
-        x = tf.transpose(inputs)
+        x = tf.transpose(inputs, perm = [0, 2, 1])
         x = tf.matmul(inputs, x)
-        x = tf.reshape(x, [-1])
+        
         outputs = self.act(x)
         return outputs

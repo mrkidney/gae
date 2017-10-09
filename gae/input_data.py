@@ -10,6 +10,68 @@ def parse_index_file(filename):
         index.append(int(line.strip()))
     return index
 
+#Adds an extra feature to denote dummy nodes
+def pad(A, X, size):
+    Apad = np.zeros((size, size))
+    Xpad = np.zeros((size, X.shape[1]+1))
+
+    Apad[:A.shape[0], :A.shape[1]] = A
+    Xpad[:X.shape[0], :X.shape[1]] = X
+    Xpad[X.shape[0]:, -1] = 1
+    return Apad, Xpad
+
+def random_order(A, X):
+    perm = np.random.permutation(A.shape[0])
+    A[perm, :] = A
+    A[:, perm] = A
+    X[perm, :] = X
+    return A, X
+
+def load_mutag():
+    #hard-coded maximum vertex count specifically for the mutag dataset
+    VERTICES = 30
+
+    def clean(L):
+        return L.split('\n')[1:-1]
+
+    As = []
+    Xs = []
+    Cs = np.zeros(188)
+    for i in range(1,189):
+        
+        with open("data/mutag/mutag_" + str(i) + ".graph") as f:
+            V, E, C = f.read().split('#')[1:4]
+            V = clean(V)
+            E = clean(E)
+            C = clean(C)
+
+            row, col, data = zip(*[e.split(",") for e in E])
+
+            V = [int(val) for val in V]
+            row = [int(val) - 1 for val in row]
+            col = [int(val) - 1 for val in col]
+            data = [int(val) for val in data]
+            Cs[i-1] = 1.0 if C[0] == '1' else 0.0
+
+            A = sp.csr_matrix((data,(row,col)), dtype = 'int16')
+            row = range(len(V))
+            col = [0] * len(V)
+            X = sp.csr_matrix((V,(row,col)), dtype = 'int16')
+
+            A, X = A.todense(), X.todense()
+            A, X = pad(A, X, VERTICES)
+            A, X = random_order(A, X)
+            X = np.hstack((X, np.identity(VERTICES)))
+
+            As.append(A)
+            Xs.append(X)
+
+    A = np.dstack(tuple(As))
+    A = np.transpose(A, axes=(2, 0, 1))
+    X = np.dstack(tuple(Xs))
+    X = np.transpose(X, axes=(2, 0, 1))
+    C = np.stack(Cs)
+    return A, X, C, 2
 
 def load_data(dataset):
     # load the data: x, tx, allx, graph
